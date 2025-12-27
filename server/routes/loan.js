@@ -4,6 +4,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const { auth } = require('../middleware/auth');
 const Loan = require('../models/Loan');
+const { generateEmiSchedule } = require('../utils/emi');
 
 // Get user's loans
 router.get('/my-loans', auth, async (req, res) => {
@@ -13,7 +14,7 @@ router.get('/my-loans', auth, async (req, res) => {
     res.json(loans);
   } catch (err) {
     console.error('Error fetching loans:', err);
-    res.status(500).json({ message: 'Error fetching loans' });
+    res.status(500).json({ type: 'server_error', message: 'Error fetching loans', status: 500 });
   }
 });
 
@@ -119,7 +120,7 @@ router.get('/dashboard-stats', auth, async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -150,13 +151,15 @@ const upload = multer({
 // Apply for loan (with document upload)
 router.post('/apply', auth, upload.array('documents', 3), async (req, res) => {
   try {
-    const { amount, tenureMonths, income } = req.body;
+    const { amount, tenureMonths, income, loanType, purpose } = req.body;
     
     const loan = new Loan({
       user: req.user.id,
       amount: Number(amount),
       tenureMonths: Number(tenureMonths),
       income: Number(income),
+      loanType: loanType ? String(loanType).trim().toLowerCase() : undefined,
+      purpose: purpose ? String(purpose).trim() : undefined,
       documents: req.files.map(file => file.filename),
       status: 'pending'
     });
@@ -165,7 +168,7 @@ router.post('/apply', auth, upload.array('documents', 3), async (req, res) => {
     res.json(loan);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -177,7 +180,63 @@ router.get('/my', auth, async (req, res) => {
     res.json(loans);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
+  }
+});
+
+router.get('/:loanId/emis', auth, async (req, res) => {
+  try {
+    const { loanId } = req.params;
+
+    if (!mongoose.isValidObjectId(loanId)) {
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'Invalid loanId',
+        status: 400,
+      });
+    }
+
+    const loan = await Loan.findById(loanId);
+    if (!loan) {
+      return res.status(404).json({
+        type: 'not_found',
+        message: 'Loan not found',
+        status: 404,
+      });
+    }
+
+    if (req.user.role !== 'admin' && loan.user?.toString() !== req.user.id) {
+      return res.status(403).json({
+        type: 'forbidden',
+        message: 'Not authorized',
+        status: 403,
+      });
+    }
+
+    const annualRatePercent = Number(
+      loan.interestRate ?? process.env.DEFAULT_ANNUAL_INTEREST_RATE ?? 8.5
+    );
+
+    const { monthlyEMI, totalInterest, schedule } = generateEmiSchedule({
+      principal: loan.amount,
+      annualRatePercent,
+      months: loan.tenureMonths,
+    });
+
+    res.json({
+      loanId: loan._id.toString(),
+      monthlyEMI,
+      totalInterest,
+      schedule,
+    });
+  } catch (err) {
+    const status = Number(err?.status || 500);
+    const message = err?.message || 'Server error';
+    res.status(status).json({
+      type: status >= 500 ? 'server_error' : 'validation_error',
+      message,
+      status,
+    });
   }
 });
 
@@ -188,18 +247,22 @@ router.get('/:id', auth, async (req, res) => {
       .populate('user', 'name email');
     
     if (!loan) {
-      return res.status(404).json({ msg: 'Loan not found' });
+      return res.status(404).json({ type: 'not_found', message: 'Loan not found', status: 404 });
     }
 
-    // Check if user owns this loan or is admin
-    if (loan.user._id.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ msg: 'Not authorized' });
+    const loanUserId = loan.user?._id ? loan.user._id.toString() : loan.user?.toString();
+    if (!loanUserId) {
+      return res.status(500).json({ type: 'server_error', message: 'Loan user missing', status: 500 });
+    }
+
+    if (req.user.role !== 'admin' && loanUserId !== req.user.id) {
+      return res.status(403).json({ type: 'forbidden', message: 'Not authorized', status: 403 });
     }
 
     res.json(loan);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 

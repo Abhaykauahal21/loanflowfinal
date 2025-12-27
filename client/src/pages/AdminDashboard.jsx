@@ -4,13 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import LoanCard from '../components/LoanCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import KycVerification from '../components/KycVerification';
+import { io } from 'socket.io-client';
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import PieChartComponent from '../components/PieChart';
-import UserList from '../components/UserList';
 
 const AnalyticsChart = ({ title, data, type = 'line', dataKey, xAxis = 'name' }) => {
   const ChartComponent = type === 'line' ? LineChart : AreaChart;
@@ -145,6 +144,13 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
   const [users, setUsers] = useState([]);
   const [activeUsers, setActiveUsers] = useState([]);
+  const [wsTick, setWsTick] = useState(0);
+  const [interestRates, setInterestRates] = useState([]);
+  const [interestRatesLoading, setInterestRatesLoading] = useState(false);
+  const [interestRatesError, setInterestRatesError] = useState('');
+  const [newRateCategory, setNewRateCategory] = useState('');
+  const [newAnnualRatePercent, setNewAnnualRatePercent] = useState('');
+  const [draftRateByCategory, setDraftRateByCategory] = useState({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -178,7 +184,115 @@ const AdminDashboard = () => {
     };
 
     fetchData();
-  }, [filter, search, activeTab]);
+  }, [filter, search, activeTab, wsTick]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (activeTab !== 'interestRates') return;
+      try {
+        setInterestRatesLoading(true);
+        setInterestRatesError('');
+        const res = await axios.get('/admin/interest-rates');
+        const rates = Array.isArray(res.data) ? res.data : [];
+        setInterestRates(rates);
+        setDraftRateByCategory(
+          rates.reduce((acc, r) => {
+            if (r?.category) acc[r.category] = String(r.annualRatePercent ?? '');
+            return acc;
+          }, {})
+        );
+      } catch (err) {
+        setInterestRatesError('Failed to fetch interest rates');
+      } finally {
+        setInterestRatesLoading(false);
+      }
+    };
+
+    load();
+  }, [activeTab]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userId = user?._id || user?.id;
+    if (!token || !userId) return;
+
+    const socket = io({
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+
+    const onLoanStatusChanged = () => {
+      setWsTick((t) => t + 1);
+    };
+
+    socket.on('loan:statusChanged', onLoanStatusChanged);
+
+    return () => {
+      socket.off('loan:statusChanged', onLoanStatusChanged);
+      socket.disconnect();
+    };
+  }, [user]);
+
+  const upsertInterestRate = async ({ category, annualRatePercent }) => {
+    const normalizedCategory = String(category || '').trim().toLowerCase();
+    const rateValue = Number(annualRatePercent);
+
+    if (!normalizedCategory) {
+      setInterestRatesError('Category is required');
+      return;
+    }
+    if (!Number.isFinite(rateValue)) {
+      setInterestRatesError('Annual rate must be a number');
+      return;
+    }
+
+    try {
+      setInterestRatesLoading(true);
+      setInterestRatesError('');
+      await axios.put(`/admin/interest-rates/${encodeURIComponent(normalizedCategory)}`, {
+        annualRatePercent: rateValue,
+      });
+      const res = await axios.get('/admin/interest-rates');
+      const rates = Array.isArray(res.data) ? res.data : [];
+      setInterestRates(rates);
+      setDraftRateByCategory(
+        rates.reduce((acc, r) => {
+          if (r?.category) acc[r.category] = String(r.annualRatePercent ?? '');
+          return acc;
+        }, {})
+      );
+      setNewRateCategory('');
+      setNewAnnualRatePercent('');
+    } catch (err) {
+      setInterestRatesError('Failed to save interest rate');
+    } finally {
+      setInterestRatesLoading(false);
+    }
+  };
+
+  const deleteInterestRate = async (category) => {
+    const normalizedCategory = String(category || '').trim().toLowerCase();
+    if (!normalizedCategory) return;
+
+    try {
+      setInterestRatesLoading(true);
+      setInterestRatesError('');
+      await axios.delete(`/admin/interest-rates/${encodeURIComponent(normalizedCategory)}`);
+      const res = await axios.get('/admin/interest-rates');
+      const rates = Array.isArray(res.data) ? res.data : [];
+      setInterestRates(rates);
+      setDraftRateByCategory(
+        rates.reduce((acc, r) => {
+          if (r?.category) acc[r.category] = String(r.annualRatePercent ?? '');
+          return acc;
+        }, {})
+      );
+    } catch (err) {
+      setInterestRatesError('Failed to delete interest rate');
+    } finally {
+      setInterestRatesLoading(false);
+    }
+  };
 
   const handleStatusUpdate = async (loanId, status) => {
     try {
@@ -202,6 +316,8 @@ const AdminDashboard = () => {
         })) || [],
         monthlyStats: analyticsRes.data.monthlyAmounts || {}
       });
+      setUsers(usersRes.data);
+      setActiveUsers(usersRes.data.filter(u => u.activeLoans > 0));
       
       // Show success notification
       alert(`Loan status updated to ${status}`);
@@ -340,17 +456,24 @@ const AdminDashboard = () => {
         {/* Navigation Tabs */}
         <div className="p-2 mb-8 bg-white rounded-2xl border border-gray-200 shadow-sm">
           <div className="flex space-x-1">
-            {['overview', 'loans', 'users', 'kyc', 'reports'].map((tab) => (
+            {[
+              { key: 'overview', label: 'Overview' },
+              { key: 'loans', label: 'Loans' },
+              { key: 'users', label: 'Users' },
+              { key: 'kyc', label: 'KYC' },
+              { key: 'interestRates', label: 'Interest Rates' },
+              { key: 'reports', label: 'Reports' },
+            ].map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
                 className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === tab
+                  activeTab === tab.key
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -627,6 +750,130 @@ const AdminDashboard = () => {
                 </p>
               </div>
             )}
+          </>
+        ) : activeTab === 'interestRates' ? (
+          <>
+            <div className="p-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
+              <div className="flex flex-col gap-4 justify-between mb-6 sm:flex-row sm:items-center">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Interest Rates</h3>
+                  <p className="text-sm text-gray-500">Set annual interest rates by loan category</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => upsertInterestRate({ category: newRateCategory, annualRatePercent: newAnnualRatePercent })}
+                  className="px-4 py-2 font-semibold text-white bg-blue-600 rounded-lg transition-colors duration-200 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={interestRatesLoading}
+                >
+                  Save Category
+                </button>
+              </div>
+
+              {interestRatesError ? (
+                <div className="p-4 mb-6 bg-red-50 rounded-xl border border-red-200">
+                  <p className="text-sm text-red-700">{interestRatesError}</p>
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-4 mb-8 md:grid-cols-3">
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">Category</label>
+                  <input
+                    value={newRateCategory}
+                    onChange={(e) => setNewRateCategory(e.target.value)}
+                    placeholder="e.g. personal"
+                    className="px-4 py-2 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={interestRatesLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium text-gray-700">Annual Rate (%)</label>
+                  <input
+                    value={newAnnualRatePercent}
+                    onChange={(e) => setNewAnnualRatePercent(e.target.value)}
+                    placeholder="e.g. 12.5"
+                    className="px-4 py-2 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={interestRatesLoading}
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className="flex items-end">
+                  {interestRatesLoading ? (
+                    <div className="flex justify-center items-center w-full">
+                      <LoadingSpinner />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-gray-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Category</th>
+                        <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">Annual Rate (%)</th>
+                        <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {interestRates.length ? (
+                        interestRates.map((r) => (
+                          <tr key={r._id || r.category}>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
+                              {r.category}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap">
+                              <input
+                                value={draftRateByCategory[r.category] ?? String(r.annualRatePercent ?? '')}
+                                onChange={(e) =>
+                                  setDraftRateByCategory((prev) => ({
+                                    ...prev,
+                                    [r.category]: e.target.value,
+                                  }))
+                                }
+                                className="px-3 py-2 w-40 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                disabled={interestRatesLoading}
+                                inputMode="decimal"
+                              />
+                            </td>
+                            <td className="px-6 py-4 text-sm font-medium text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  upsertInterestRate({
+                                    category: r.category,
+                                    annualRatePercent: draftRateByCategory[r.category] ?? r.annualRatePercent,
+                                  })
+                                }
+                                className="mr-4 text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={interestRatesLoading}
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteInterestRate(r.category)}
+                                className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={interestRatesLoading}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td className="px-6 py-6 text-sm text-gray-500" colSpan={3}>
+                            No interest rate categories yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </>
         ) : (
           // Reports Tab

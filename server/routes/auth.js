@@ -37,14 +37,10 @@ router.post('/register', async (req, res) => {
 
     // Enhanced input validation
     if (!name?.trim() || !email?.trim() || !password?.trim()) {
-      return res.status(400).json({ 
-        success: false,
-        msg: 'Please enter all required fields',
-        fields: {
-          name: !name?.trim() ? 'Name is required' : null,
-          email: !email?.trim() ? 'Email is required' : null,
-          password: !password?.trim() ? 'Password is required' : null
-        }
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'Please enter all required fields',
+        status: 400,
       });
     }
 
@@ -52,23 +48,29 @@ router.post('/register', async (req, res) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
-        success: false,
-        msg: 'Please enter a valid email address'
+        type: 'validation_error',
+        message: 'Please enter a valid email address',
+        status: 400,
       });
     }
 
     // Validate password strength
     if (password.length < 6) {
       return res.status(400).json({
-        success: false,
-        msg: 'Password must be at least 6 characters long'
+        type: 'validation_error',
+        message: 'Password must be at least 6 characters long',
+        status: 400,
       });
     }
 
     // Check if user exists
     let user = await User.findOne({ email: email.toLowerCase() });
     if (user) {
-      return res.status(400).json({ success: false, msg: 'User already exists' });
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'User already exists',
+        status: 400,
+      });
     }
 
     // Hash password
@@ -105,9 +107,9 @@ router.post('/register', async (req, res) => {
   } catch (err) {
     console.error('❌ Register error:', err);
     res.status(500).json({
-      success: false,
-      msg: 'Server error during registration',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      type: 'server_error',
+      message: 'Server error during registration',
+      status: 500,
     });
   }
 });
@@ -122,12 +124,9 @@ router.post('/login', async (req, res) => {
     if (!email?.trim() || !password?.trim()) {
       console.log('❌ Login validation failed: Missing fields');
       return res.status(400).json({
-        success: false,
-        msg: 'Please enter all required fields',
-        fields: {
-          email: !email?.trim() ? 'Email is required' : null,
-          password: !password?.trim() ? 'Password is required' : null
-        }
+        type: 'validation_error',
+        message: 'Please enter all required fields',
+        status: 400,
       });
     }
 
@@ -135,8 +134,9 @@ router.post('/login', async (req, res) => {
     if (mongoose.connection.readyState !== 1) {
       console.error('❌ MongoDB not connected. Current state:', mongoose.connection.readyState);
       return res.status(500).json({
-        success: false,
-        msg: 'Database connection error. Please try again.'
+        type: 'server_error',
+        message: 'Database connection error. Please try again.',
+        status: 500,
       });
     }
 
@@ -151,8 +151,9 @@ router.post('/login', async (req, res) => {
     if (!user) {
       console.log('❌ Login failed: User not found for email:', email);
       return res.status(401).json({ 
-        success: false,
-        msg: 'Invalid email or password' 
+        type: 'auth_error',
+        message: 'Invalid email or password',
+        status: 401,
       });
     }
 
@@ -160,8 +161,9 @@ router.post('/login', async (req, res) => {
     if (!user.password) {
       console.error('❌ User found but password field is missing for email:', email);
       return res.status(500).json({
-        success: false,
-        msg: 'Account configuration error. Please contact support.'
+        type: 'server_error',
+        message: 'Account configuration error. Please contact support.',
+        status: 500,
       });
     }
 
@@ -175,8 +177,9 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       console.log('❌ Login failed: Invalid password for email:', email);
       return res.status(401).json({ 
-        success: false,
-        msg: 'Invalid email or password'
+        type: 'auth_error',
+        message: 'Invalid email or password',
+        status: 401,
       });
     }
 
@@ -202,9 +205,9 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('❌ Login error:', err);
     res.status(500).json({
-      success: false,
-      msg: 'Server error during login',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      type: 'server_error',
+      message: 'Server error during login',
+      status: 500,
     });
   }
 });
@@ -217,9 +220,9 @@ router.get('/user', require('../middleware/auth').auth, async (req, res) => {
   } catch (err) {
     console.error('❌ Get user error:', err);
     res.status(500).json({
-      success: false,
-      msg: 'Server error fetching user',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      type: 'server_error',
+      message: 'Server error fetching user',
+      status: 500,
     });
   }
 });

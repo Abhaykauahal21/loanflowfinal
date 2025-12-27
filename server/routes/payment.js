@@ -8,7 +8,19 @@ router.post('/', auth, async (req, res) => {
   try {
     const { loanId, amount, paymentMethod, transactionId, remarks } = req.body;
     if (!loanId || !amount || !paymentMethod) {
-      return res.status(400).json({ msg: 'loanId, amount and paymentMethod are required' });
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'loanId, amount and paymentMethod are required',
+        status: 400,
+      });
+    }
+
+    if (!mongoose.isValidObjectId(loanId)) {
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'Invalid loanId',
+        status: 400,
+      });
     }
 
     const payment = await Payment.create({
@@ -24,17 +36,29 @@ router.post('/', auth, async (req, res) => {
     res.json(payment);
   } catch (err) {
     console.error('Create payment error:', err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
 // Get payments for a user
-router.get('/user/:id', auth, async (req, res) => {
+router.get('/user/:userId', auth, async (req, res) => {
   try {
-    const userId = req.params.id;
-    // Allow only owner or admin
-    if (req.user.role !== 'admin' && req.user.id !== userId) {
-      return res.status(403).json({ msg: 'Not authorized' });
+    const { userId } = req.params;
+
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'Invalid userId',
+        status: 400,
+      });
+    }
+
+    if (req.user.id !== userId) {
+      return res.status(403).json({
+        type: 'forbidden',
+        message: 'Not authorized',
+        status: 403,
+      });
     }
 
     const payments = await Payment.find({ userId: new mongoose.Types.ObjectId(userId) })
@@ -42,7 +66,7 @@ router.get('/user/:id', auth, async (req, res) => {
     res.json(payments);
   } catch (err) {
     console.error('Fetch user payments error:', err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -52,12 +76,20 @@ router.put('/:id/status', [auth, adminOnly], async (req, res) => {
     const { status, remarks } = req.body;
     const allowed = ['pending', 'completed', 'failed'];
     if (!allowed.includes(status)) {
-      return res.status(400).json({ msg: 'Invalid status' });
+      return res.status(400).json({
+        type: 'validation_error',
+        message: 'Invalid status',
+        status: 400,
+      });
     }
 
     const payment = await Payment.findById(req.params.id);
     if (!payment) {
-      return res.status(404).json({ msg: 'Payment not found' });
+      return res.status(404).json({
+        type: 'not_found',
+        message: 'Payment not found',
+        status: 404,
+      });
     }
 
     payment.status = status;
@@ -67,7 +99,7 @@ router.put('/:id/status', [auth, adminOnly], async (req, res) => {
     res.json(payment);
   } catch (err) {
     console.error('Update payment status error:', err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 

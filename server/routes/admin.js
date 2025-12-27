@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { auth, adminOnly } = require('../middleware/auth');
 const Loan = require('../models/Loan');
+const InterestRateCategory = require('../models/InterestRateCategory');
 const User = require('../models/User');
 
 // Get all loans (admin only)
@@ -32,30 +33,122 @@ router.get('/loans', [auth, adminOnly], async (req, res) => {
     res.json(loans);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
 // Update loan status (admin only)
 router.put('/loans/:id/status', [auth, adminOnly], async (req, res) => {
   try {
-    const { status, adminNote } = req.body;
+    const { status, adminNote, loanType, interestRate } = req.body;
     const loan = await Loan.findById(req.params.id);
 
     if (!loan) {
-      return res.status(404).json({ msg: 'Loan not found' });
+      return res.status(404).json({ type: 'not_found', message: 'Loan not found', status: 404 });
     }
+
+    const prevStatus = loan.status;
 
     loan.status = status;
     if (adminNote) {
       loan.adminNote = adminNote;
     }
+    if (loanType) {
+      loan.loanType = String(loanType).trim().toLowerCase();
+    }
+
+    if (Number.isFinite(Number(interestRate))) {
+      loan.interestRate = Number(interestRate);
+    } else if (status === 'approved' && prevStatus !== 'approved' && loan.interestRate == null) {
+      const categoryKey = loan.loanType ? String(loan.loanType).trim().toLowerCase() : '';
+      if (categoryKey) {
+        const cat = await InterestRateCategory.findOne({ category: categoryKey });
+        if (cat) {
+          loan.interestRate = cat.annualRatePercent;
+        }
+      }
+
+      if (loan.interestRate == null) {
+        loan.interestRate = Number(process.env.DEFAULT_ANNUAL_INTEREST_RATE ?? 8.5);
+      }
+    }
 
     await loan.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      const userId = loan.user?.toString();
+      const payload = {
+        loanId: loan._id.toString(),
+        userId,
+        status: loan.status,
+        adminNote: loan.adminNote,
+        updatedAt: loan.updatedAt,
+      };
+
+      io.to('role:admin').emit('loan:statusChanged', payload);
+      if (userId) {
+        io.to(`user:${userId}`).emit('loan:statusChanged', payload);
+      }
+    }
+
     res.json(loan);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
+  }
+});
+
+router.get('/interest-rates', [auth, adminOnly], async (req, res) => {
+  try {
+    const rates = await InterestRateCategory.find().sort({ category: 1 });
+    res.json(rates);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
+  }
+});
+
+router.put('/interest-rates/:category', [auth, adminOnly], async (req, res) => {
+  try {
+    const category = String(req.params.category || '').trim().toLowerCase();
+    const annualRatePercent = Number(req.body?.annualRatePercent);
+
+    if (!category) {
+      return res.status(400).json({ type: 'validation_error', message: 'Category is required', status: 400 });
+    }
+    if (!Number.isFinite(annualRatePercent)) {
+      return res.status(400).json({ type: 'validation_error', message: 'annualRatePercent must be a number', status: 400 });
+    }
+    if (annualRatePercent < 0 || annualRatePercent > 100) {
+      return res.status(400).json({ type: 'validation_error', message: 'annualRatePercent must be between 0 and 100', status: 400 });
+    }
+
+    const updated = await InterestRateCategory.findOneAndUpdate(
+      { category },
+      { $set: { annualRatePercent } },
+      { new: true, upsert: true }
+    );
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
+  }
+});
+
+router.delete('/interest-rates/:category', [auth, adminOnly], async (req, res) => {
+  try {
+    const category = String(req.params.category || '').trim().toLowerCase();
+    if (!category) {
+      return res.status(400).json({ type: 'validation_error', message: 'Category is required', status: 400 });
+    }
+
+    await InterestRateCategory.deleteOne({ category });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -68,7 +161,7 @@ router.get('/users', [auth, adminOnly], async (req, res) => {
     res.json(users);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -96,7 +189,7 @@ router.get('/stats', [auth, adminOnly], async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -190,7 +283,7 @@ router.get('/analytics', [auth, adminOnly], async (req, res) => {
     });
   } catch (error) {
     console.error('Analytics error:', error);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 
@@ -238,7 +331,7 @@ router.get('/active-users', [auth, adminOnly], async (req, res) => {
     res.json(activeUsers);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    res.status(500).json({ type: 'server_error', message: 'Server error', status: 500 });
   }
 });
 

@@ -70,6 +70,7 @@ export const handleAxiosError = (error, dispatch, showNotification) => {
   const errorType = getErrorType(error);
 
   // Show notification
+  
   dispatch(showNotification({
     type: 'error',
     message: errorMessage,

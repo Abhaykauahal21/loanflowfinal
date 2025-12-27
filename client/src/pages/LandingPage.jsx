@@ -22,6 +22,9 @@ import {
 const LandingPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const MotionH1 = motion.h1;
+  const MotionP = motion.p;
+  const MotionDiv = motion.div;
 
   const words = [
     { text: "Smart", className: "text-blue-400" },
@@ -102,7 +105,7 @@ const LandingPage = () => {
       {/* Enhanced Hero Section with Lamp Effect */}
       <div className="relative">
         <LampContainer>
-          <motion.h1
+          <MotionH1
             initial={{ opacity: 0.5, y: 100 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{
@@ -113,12 +116,12 @@ const LandingPage = () => {
             className="mt-8 bg-gradient-to-br from-slate-300 to-slate-500 py-4 bg-clip-text text-center text-4xl font-medium tracking-tight text-transparent md:text-7xl"
           >
             <TypewriterEffect words={words} />
-          </motion.h1>
+          </MotionH1>
         </LampContainer>
         
         <div className="relative z-20 max-w-6xl mx-auto px-4 -mt-20">
           <div className="text-center space-y-8">
-            <motion.p 
+            <MotionP 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
@@ -126,9 +129,9 @@ const LandingPage = () => {
             >
               Transform your financial journey with our AI-powered loan platform. 
               Fast, transparent, and designed for your success.
-            </motion.p>
+            </MotionP>
             
-            <motion.div 
+            <MotionDiv 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
@@ -153,10 +156,10 @@ const LandingPage = () => {
                   <IconArrowRight className="ml-3 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                 </button>
               )}
-            </motion.div>
+            </MotionDiv>
 
             {/* Stats Section */}
-            <motion.div 
+            <MotionDiv 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
@@ -170,7 +173,7 @@ const LandingPage = () => {
                   <div className="text-slate-400 text-sm md:text-base mt-2">{stat.label}</div>
                 </div>
               ))}
-            </motion.div>
+            </MotionDiv>
           </div>
         </div>
       </div>
@@ -180,7 +183,7 @@ const LandingPage = () => {
         <>
           <WavyBackground className="max-w-7xl mx-auto px-4 py-24">
             <div className="relative z-10">
-              <motion.div 
+              <MotionDiv 
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
@@ -195,11 +198,11 @@ const LandingPage = () => {
                 <p className="text-xl text-slate-300 max-w-2xl mx-auto">
                   Experience the future of lending with our cutting-edge platform
                 </p>
-              </motion.div>
+              </MotionDiv>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {features.map((feature, index) => (
-                  <motion.div
+                  <MotionDiv
                     key={index}
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -218,7 +221,7 @@ const LandingPage = () => {
                         <p className="text-slate-300 leading-relaxed">{feature.description}</p>
                       </div>
                     </BackgroundGradient>
-                  </motion.div>
+                  </MotionDiv>
                 ))}
               </div>
             </div>
@@ -227,7 +230,7 @@ const LandingPage = () => {
           {/* How It Works Section */}
           <div className="bg-slate-900 py-24">
             <div className="max-w-6xl mx-auto px-4">
-              <motion.div 
+              <MotionDiv 
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 className="text-center mb-20"
@@ -239,11 +242,11 @@ const LandingPage = () => {
                   </span>
                 </h2>
                 <p className="text-xl text-slate-300">Get your loan in three simple steps</p>
-              </motion.div>
+              </MotionDiv>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {processSteps.map((step, index) => (
-                  <motion.div
+                  <MotionDiv
                     key={index}
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -260,7 +263,7 @@ const LandingPage = () => {
                         <p className="text-slate-300">{step.description}</p>
                       </div>
                     </BackgroundGradient>
-                  </motion.div>
+                  </MotionDiv>
                 ))}
               </div>
             </div>
@@ -270,7 +273,7 @@ const LandingPage = () => {
           <div className="relative py-24">
             <BackgroundBeams />
             <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
-              <motion.div
+              <MotionDiv
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.7 }}
@@ -312,7 +315,7 @@ const LandingPage = () => {
                     </div>
                   </div>
                 </BackgroundGradient>
-              </motion.div>
+              </MotionDiv>
             </div>
           </div>
         </>

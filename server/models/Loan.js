@@ -5,6 +5,9 @@ const LoanSchema = new mongoose.Schema({
   amount: Number,
   tenureMonths: Number,
   income: Number,
+  loanType: { type: String, trim: true },
+  purpose: { type: String, trim: true },
+  interestRate: Number,
   documents: [String], // file paths or URLs
   status: { type: String, enum: ['pending','under_review','approved','rejected'], default: 'pending' },
   adminNote: String

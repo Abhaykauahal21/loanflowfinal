@@ -3,40 +3,38 @@ const User = require('../models/User');
 
 async function auth(req, res, next) {
   try {
-    // Check for token in Authorization header
-    const authHeader = req.header('Authorization');
+    const authHeader = req.headers.authorization || req.header('Authorization');
     if (!authHeader) {
       return res.status(401).json({
-        success: false,
-        msg: 'Access denied. No token provided.'
+        type: 'auth_error',
+        message: 'Missing Authorization header',
+        status: 401,
       });
     }
 
-    // Verify token format
-    const token = authHeader.split(' ')[1];
-    if (!token) {
+    const [scheme, token] = authHeader.split(' ');
+    if (scheme !== 'Bearer' || !token) {
       return res.status(401).json({
-        success: false,
-        msg: 'Access denied. Invalid token format.'
+        type: 'auth_error',
+        message: 'Invalid Authorization header format',
+        status: 401,
       });
     }
 
     try {
-      // Verify token and extract user data
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      // Check if user still exists and is active
       const user = await User.findById(decoded.id);
       if (!user) {
         return res.status(401).json({
-          success: false,
-          msg: 'User no longer exists.'
+          type: 'auth_error',
+          message: 'User no longer exists',
+          status: 401,
         });
       }
 
-      // Attach user info to request
       req.user = {
-        id: user._id,
+        id: user._id.toString(),
         role: user.role,
         email: user.email
       };
@@ -45,15 +43,17 @@ async function auth(req, res, next) {
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({
-          success: false,
-          msg: 'Token has expired. Please login again.'
+          type: 'auth_error',
+          message: 'Token has expired. Please login again.',
+          status: 401,
         });
       }
       
       if (err.name === 'JsonWebTokenError') {
         return res.status(401).json({
-          success: false,
-          msg: 'Invalid token. Please login again.'
+          type: 'auth_error',
+          message: 'Invalid token. Please login again.',
+          status: 401,
         });
       }
       
@@ -62,14 +62,21 @@ async function auth(req, res, next) {
   } catch (err) {
     console.error('Auth middleware error:', err);
     res.status(500).json({
-      success: false,
-      msg: 'Internal server error during authentication.'
+      type: 'server_error',
+      message: 'Internal server error during authentication',
+      status: 500,
     });
   }
 }
 
 function adminOnly(req,res,next){
-  if(req.user?.role !== 'admin') return res.status(403).json({msg:'Admins only'});
+  if(req.user?.role !== 'admin') {
+    return res.status(403).json({
+      type: 'forbidden',
+      message: 'Admins only',
+      status: 403,
+    });
+  }
   next();
 }
 

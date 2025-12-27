@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { generateEmiSchedule, roundToCents } from '../utils/emi';
+import { generateEmiSchedule } from '../utils/emi';
 
 /**
  * PaymentForm

@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import LoanCard from '../components/LoanCard';
 import axios from '../api/axios';
 import { FaFileUpload, FaMoneyBillWave, FaChartLine, FaFileInvoiceDollar, FaBell, FaCreditCard, FaShieldAlt, FaPiggyBank } from 'react-icons/fa';
+import { getErrorMessage } from '../utils/errorHandling';
+import { io } from 'socket.io-client';
 
 // Lazy load components
 const PaymentForm = lazy(() => import('../components/PaymentForm'));
@@ -147,8 +149,7 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [dashboardData, setDashboardData] = useState(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [, setShowPaymentModal] = useState(false);
   const [stats, setStats] = useState({
     totalLoans: 0,
     activeLoans: 0,
@@ -168,24 +169,27 @@ const UserDashboard = () => {
       setLoading(true);
       setError('');
       
-      const [loansRes, statsRes, paymentsRes] = await Promise.all([
-        axios.get('/loans/my').catch(err => {
-          console.error('Failed to fetch loans:', err);
-          return { data: [] };
-        }),
-        axios.get('/loans/dashboard-stats').catch(err => {
-          console.error('Failed to fetch dashboard stats:', err);
-          return { data: null };
-        }),
-        axios.get(`/payments/user/${userId}`).catch(err => {
-          console.error('Failed to fetch payments:', err);
-          return { data: [] };
-        })
+      const [loansRes, statsRes, paymentsRes] = await Promise.allSettled([
+        axios.get('/loans/my'),
+        axios.get('/loans/dashboard-stats'),
+        axios.get(`/payments/user/${userId}`),
       ]);
 
-      const loansData = loansRes.data;
-      const statsData = statsRes.data;
-      const paymentsData = paymentsRes.data;
+      const loansData = loansRes.status === 'fulfilled' ? loansRes.value.data : [];
+      const statsData = statsRes.status === 'fulfilled' ? statsRes.value.data : null;
+      const paymentsData = paymentsRes.status === 'fulfilled' ? paymentsRes.value.data : [];
+
+      const firstError =
+        loansRes.status === 'rejected'
+          ? loansRes.reason
+          : statsRes.status === 'rejected'
+          ? statsRes.reason
+          : paymentsRes.status === 'rejected'
+          ? paymentsRes.reason
+          : null;
+      if (firstError) {
+        setError(getErrorMessage(firstError));
+      }
 
       setLoans(loansData || []);
       setPayments(paymentsData || []);
@@ -232,18 +236,41 @@ const UserDashboard = () => {
       }
   } catch (err) {
     console.error('Dashboard fetch error:', err);
-    setError(err.response?.data?.msg || 'Failed to fetch dashboard data');
+    setError(getErrorMessage(err));
   } finally {
     setLoading(false);
   }
   }, [user]);
 
   useEffect(() => {
-    if (user && user._id) {
+    if (user && (user._id || user.id)) {
       fetchDashboardData();
       const interval = setInterval(fetchDashboardData, 30000);
       return () => clearInterval(interval);
     }
+  }, [user, fetchDashboardData]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userId = user?._id || user?.id;
+    if (!token || !userId) return;
+
+    const socket = io({
+      auth: { token },
+      transports: ['websocket', 'polling'],
+    });
+
+    const onLoanStatusChanged = (payload) => {
+      if (payload?.userId && payload.userId !== userId) return;
+      fetchDashboardData();
+    };
+
+    socket.on('loan:statusChanged', onLoanStatusChanged);
+
+    return () => {
+      socket.off('loan:statusChanged', onLoanStatusChanged);
+      socket.disconnect();
+    };
   }, [user, fetchDashboardData]);
 
   if (loading) {
@@ -513,54 +540,85 @@ const UserDashboard = () => {
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Recent Transactions</h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Date</th>
-                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Description</th>
-                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {user.paymentHistory?.slice(0, 5).map((payment) => (
-                  <tr key={payment._id} className="transition-colors duration-150 hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
-                      {new Date(payment.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      Loan Payment - {payment.loanId}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                      ${payment.amount.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+          {payments.length === 0 ? (
+            <div className="p-6 text-center">
+              <div className="text-gray-400">
+                <FaCreditCard className="mx-auto mb-3 text-3xl" />
+                <p>No transactions found</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="divide-y divide-gray-200 sm:hidden">
+                {payments.slice(0, 5).map((payment) => (
+                  <div key={payment._id} className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Loan Payment</p>
+                        <p className="text-xs text-gray-500">
+                          {payment.loanId ? `Loan ${String(payment.loanId).slice(-6)}` : 'Loan'}
+                        </p>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                         payment.status === 'completed'
                           ? 'bg-green-100 text-green-800'
                           : payment.status === 'pending'
                           ? 'bg-yellow-100 text-yellow-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                        {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
                       </span>
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="flex justify-between items-center mt-3">
+                      <p className="text-sm text-gray-600">
+                        {new Date(payment.paymentDate || payment.createdAt).toLocaleDateString()}
+                      </p>
+                      <p className="text-sm font-semibold text-gray-900">${Number(payment.amount).toLocaleString()}</p>
+                    </div>
+                  </div>
                 ))}
-                {(!user.paymentHistory || user.paymentHistory.length === 0) && (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-12 text-center">
-                      <div className="text-gray-400">
-                        <FaCreditCard className="mx-auto mb-3 text-3xl" />
-                        <p>No transactions found</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Date</th>
+                      <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Description</th>
+                      <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Amount</th>
+                      <th className="px-6 py-4 text-xs font-semibold tracking-wider text-left text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {payments.slice(0, 5).map((payment) => (
+                      <tr key={payment._id} className="transition-colors duration-150 hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
+                          {new Date(payment.paymentDate || payment.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          Loan Payment {payment.loanId ? `- ${String(payment.loanId).slice(-6)}` : ''}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">
+                          ${Number(payment.amount).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                            payment.status === 'completed'
+                              ? 'bg-green-100 text-green-800'
+                              : payment.status === 'pending'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {payment.status?.charAt(0).toUpperCase() + payment.status?.slice(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Financial Tips */}
