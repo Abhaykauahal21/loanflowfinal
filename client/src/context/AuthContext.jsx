@@ -31,21 +31,47 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        // First verify the API is available
-        await axios.get('/health');
-        
+        // Verify token and get user - skip health check to avoid unnecessary requests
         const response = await axios.get('/auth/user', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        setUser(response.data);
-        setError(null);
+        
+        if (response.data) {
+          setUser(response.data);
+          setError(null);
+        } else {
+          throw new Error('Invalid user data');
+        }
       } catch (err) {
-        console.error('Token verification failed:', err);
-        localStorage.removeItem('token');
-        setError('Session expired. Please login again.');
-        setUser(null);
+        // Only remove token on actual authentication errors (401, 403)
+        // Don't remove on network errors or server errors (500)
+        const status = err?.response?.status;
+        const isAuthError = status === 401 || status === 403;
+        
+        if (isAuthError) {
+          console.error('Token verification failed - authentication error:', err);
+          localStorage.removeItem('token');
+          setError('Session expired. Please login again.');
+          setUser(null);
+        } else if (status >= 500) {
+          // Server error - keep token, user might still be valid
+          console.warn('Server error during token verification, keeping session:', err);
+          setError('Server error. Please try again.');
+          // Don't remove token or user on server errors
+        } else if (!err.response) {
+          // Network error - keep token, might be temporary
+          console.warn('Network error during token verification, keeping session:', err);
+          setError(null);
+          // Don't remove token on network errors
+        } else {
+          // Other errors - remove token to be safe
+          console.error('Token verification failed:', err);
+          localStorage.removeItem('token');
+          setError('Session expired. Please login again.');
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }

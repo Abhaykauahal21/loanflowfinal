@@ -42,10 +42,21 @@ api.interceptors.response.use(
   (error) => {
     const errorType = getErrorType(error);
     const errorMessage = getErrorMessage(error);
+    const status = error?.response?.status;
+    const isAuthEndpoint = error?.config?.url?.includes('/auth/');
 
-    if (errorType === ErrorTypes.AUTHENTICATION_ERROR) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+    // Only remove token and redirect on actual authentication errors
+    // Don't remove on network errors or when verifying token on init
+    if (errorType === ErrorTypes.AUTHENTICATION_ERROR && status === 401) {
+      // Only remove token if it's not the initial token verification
+      // The AuthContext will handle token removal during init
+      if (!isAuthEndpoint || !error?.config?.url?.includes('/auth/user')) {
+        localStorage.removeItem('token');
+        // Only redirect if we're not already on login page
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
       return Promise.reject(error);
     }
 
