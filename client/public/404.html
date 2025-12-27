@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoanFlow - Loan Management System</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+        // Store the current path and redirect to index.html
+        var path = window.location.pathname;
+        var search = window.location.search;
+        var hash = window.location.hash;
+        
+        if (path !== '/' && path !== '/index.html') {
+            sessionStorage.setItem('redirectPath', path + search + hash);
+        }
+        
+        window.location.replace('/index.html');
+    </script>
+</head>
+<body>
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=/index.html" />
+    </noscript>
+    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: Arial, sans-serif; color: #666;">
+        <p>Redirecting...</p>
+    </div>
+</body>
+</html>
+
