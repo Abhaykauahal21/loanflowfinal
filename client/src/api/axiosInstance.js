@@ -4,11 +4,17 @@ import { showNotification } from '../store/slices/notificationsSlice';
 import { ErrorTypes, getErrorType, getErrorMessage } from '../utils/errorHandling';
 
 // Use environment variable for production, relative path for development
+// For production on Render, set VITE_API_URL=https://loanflowfinal.onrender.com/api
 let baseURL = import.meta.env.VITE_API_URL || '/api';
 
 // Ensure baseURL ends with /api if it's a full URL
-if (baseURL.startsWith('http') && !baseURL.endsWith('/api')) {
+if (baseURL.startsWith('http') && !baseURL.endsWith('/api') && !baseURL.endsWith('/api/')) {
   baseURL = baseURL.endsWith('/') ? `${baseURL}api` : `${baseURL}/api`;
+}
+
+// Log API base URL in development for debugging
+if (import.meta.env.DEV) {
+  console.log('🔗 API Base URL:', baseURL);
 }
 
 const api = axios.create({

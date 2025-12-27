@@ -185,12 +185,41 @@ LoanFlow/
 PORT=5004
 MONGODB_URI=your_mongodb_uri
 JWT_SECRET=your_secret_key
+FRONTEND_URL=https://your-frontend.onrender.com  # Optional: for CORS in production
 ```
 
 ### Client (.env)
 ```env
 VITE_API_URL=http://localhost:5004/api
 ```
+
+## 🚀 Deployment on Render
+
+### Backend Deployment
+1. Create a new Web Service on Render
+2. Connect your GitHub repository
+3. Set the following environment variables:
+   - `PORT` - Auto-set by Render (or set manually)
+   - `MONGODB_URI` - Your MongoDB Atlas connection string
+   - `JWT_SECRET` - A secure random string for JWT signing
+   - `FRONTEND_URL` - Your frontend URL (e.g., `https://loan-p6fo.onrender.com`)
+   - `NODE_ENV` - Set to `production`
+4. Build Command: `cd server && npm install`
+5. Start Command: `cd server && npm start`
+6. Root Directory: `server`
+
+**Backend URL**: `https://loanflowfinal.onrender.com`
+
+### Frontend Deployment
+1. Create a new Static Site on Render
+2. Connect your GitHub repository
+3. Set the following environment variable:
+   - `VITE_API_URL` - Your backend API URL (e.g., `https://loanflowfinal.onrender.com/api`)
+4. Build Command: `cd client && npm install && npm run build`
+5. Publish Directory: `client/dist`
+6. Root Directory: `client`
+
+**Note**: The frontend will automatically use the backend URL from `VITE_API_URL` in production. If not set, it will use relative paths which won't work for cross-origin requests.
 
 ## 👥 Contributing
 1. Fork the repository

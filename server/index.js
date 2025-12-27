@@ -34,6 +34,12 @@ if (process.env.FRONTEND_URL) {
 // Add common Render frontend URLs
 corsOrigins.push('https://loan-p6fo.onrender.com');
 
+// Log CORS configuration for debugging
+if (process.env.NODE_ENV === 'production') {
+  console.log('🌐 CORS allowed origins:', corsOrigins);
+  console.log('🌐 Frontend URL from env:', process.env.FRONTEND_URL || 'Not set');
+}
+
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
