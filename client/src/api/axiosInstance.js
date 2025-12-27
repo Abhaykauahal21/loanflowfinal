@@ -4,7 +4,12 @@ import { showNotification } from '../store/slices/notificationsSlice';
 import { ErrorTypes, getErrorType, getErrorMessage } from '../utils/errorHandling';
 
 // Use environment variable for production, relative path for development
-const baseURL = import.meta.env.VITE_API_URL || '/api';
+let baseURL = import.meta.env.VITE_API_URL || '/api';
+
+// Ensure baseURL ends with /api if it's a full URL
+if (baseURL.startsWith('http') && !baseURL.endsWith('/api')) {
+  baseURL = baseURL.endsWith('/') ? `${baseURL}api` : `${baseURL}/api`;
+}
 
 const api = axios.create({
   baseURL,

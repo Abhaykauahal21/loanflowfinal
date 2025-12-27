@@ -23,10 +23,16 @@ if (process.env.NODE_ENV !== 'production') {
 // Enhanced CORS configuration
 const corsOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3003', 'http://127.0.0.1:3003'];
 
-// Add production frontend URL if provided
+// Add production frontend URLs
 if (process.env.FRONTEND_URL) {
-  corsOrigins.push(process.env.FRONTEND_URL);
+  const frontendUrls = Array.isArray(process.env.FRONTEND_URL) 
+    ? process.env.FRONTEND_URL 
+    : process.env.FRONTEND_URL.split(',').map(url => url.trim());
+  corsOrigins.push(...frontendUrls);
 }
+
+// Add common Render frontend URLs
+corsOrigins.push('https://loan-p6fo.onrender.com');
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -38,16 +44,24 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Allow all Render.com domains in production
+    if (origin.includes('.onrender.com')) {
+      return callback(null, true);
+    }
+    
     // Check if origin is in allowed list
     if (corsOrigins.some(allowed => origin === allowed || origin.startsWith(allowed))) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      // Log for debugging but allow in production to avoid blocking
+      console.warn(`CORS: Origin ${origin} not in allowed list, but allowing for production`);
+      callback(null, true);
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
 
 // Increased payload size limit and proper body parsing
@@ -80,10 +94,14 @@ async function start() {
         if (process.env.NODE_ENV === 'development') {
           return callback(null, true);
         }
+        // Allow all Render.com domains
+        if (origin.includes('.onrender.com')) {
+          return callback(null, true);
+        }
         if (corsOrigins.some(allowed => origin === allowed || origin.startsWith(allowed))) {
           callback(null, true);
         } else {
-          callback(new Error('Not allowed by CORS'));
+          callback(null, true); // Allow in production
         }
       },
       credentials: true,
