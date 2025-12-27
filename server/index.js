@@ -23,8 +23,28 @@ if (process.env.NODE_ENV !== 'production') {
 // Enhanced CORS configuration
 const corsOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3003', 'http://127.0.0.1:3003'];
 
+// Add production frontend URL if provided
+if (process.env.FRONTEND_URL) {
+  corsOrigins.push(process.env.FRONTEND_URL);
+}
+
 app.use(cors({
-  origin: corsOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (corsOrigins.some(allowed => origin === allowed || origin.startsWith(allowed))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -35,6 +55,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static('uploads')); // serve files in dev
 
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Loan App API Server',
+    status: 'running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -45,7 +75,17 @@ async function start() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: corsOrigins,
+      origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (process.env.NODE_ENV === 'development') {
+          return callback(null, true);
+        }
+        if (corsOrigins.some(allowed => origin === allowed || origin.startsWith(allowed))) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST'],
     },
@@ -79,11 +119,24 @@ async function start() {
   app.use('/api/payments', require('./routes/payment'));
   app.use('/api/admin', require('./routes/admin'));
 
+  // 404 handler for undefined routes
   app.use((req, res) => {
     res.status(404).json({
+      success: false,
       type: 'not_found',
-      message: 'Route not found',
+      message: `Route ${req.method} ${req.path} not found`,
       status: 404,
+      availableEndpoints: [
+        'GET /',
+        'GET /api/health',
+        'POST /api/auth/register',
+        'POST /api/auth/login',
+        'GET /api/loans/my',
+        'GET /api/loans/dashboard-stats',
+        'POST /api/loans/apply',
+        'GET /api/admin/loans',
+        'GET /api/admin/stats'
+      ]
     });
   });
 

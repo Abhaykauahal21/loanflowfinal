@@ -3,8 +3,11 @@ import { store } from '../store';
 import { showNotification } from '../store/slices/notificationsSlice';
 import { ErrorTypes, getErrorType, getErrorMessage } from '../utils/errorHandling';
 
+// Use environment variable for production, relative path for development
+const baseURL = import.meta.env.VITE_API_URL || '/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   timeout: 15000,
   withCredentials: true,
   headers: {
