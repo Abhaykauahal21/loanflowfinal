@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
 import axios from '../api/axios';
 import { hasPermission, getRolePermissions, Permissions } from '../utils/permissions';
+import { decodeJWT, isTokenExpired, getUserFromToken } from '../utils/jwt';
 
 const AuthContext = createContext(null);
 
@@ -30,49 +31,61 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      try {
-        // Verify token and get user - skip health check to avoid unnecessary requests
-        const response = await axios.get('/auth/user', {
+      // First, check if token is expired
+      if (isTokenExpired(token)) {
+        console.warn('Token is expired');
+        localStorage.removeItem('token');
+        setUser(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      // Immediately restore user from token (client-side decode)
+      // This prevents logout on refresh even if server is slow
+      const tokenUser = getUserFromToken(token);
+      if (tokenUser) {
+        // Set user immediately from token to prevent logout
+        setUser(tokenUser);
+        setError(null);
+        setLoading(false); // Stop loading immediately
+        
+        // Then verify with server in background and update user with full data
+        // This is non-blocking - user stays logged in even if this fails
+        axios.get('/auth/user', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
+        })
+        .then(response => {
+          if (response.data) {
+            // Update with full user data from server
+            setUser({ ...response.data, _id: response.data._id || response.data.id });
+            setError(null);
+          }
+        })
+        .catch(err => {
+          // Only remove token on actual authentication errors (401, 403)
+          const status = err?.response?.status;
+          const isAuthError = status === 401 || status === 403;
+          
+          if (isAuthError) {
+            console.error('Token verification failed - authentication error:', err);
+            localStorage.removeItem('token');
+            setUser(null);
+            setError('Session expired. Please login again.');
+          } else {
+            // For network/server errors, keep the user logged in with token data
+            // They can still use the app, server verification will retry on next request
+            console.warn('Server verification failed, but keeping session:', err);
+            // Don't remove token or user - keep them logged in
+          }
         });
-        
-        if (response.data) {
-          setUser(response.data);
-          setError(null);
-        } else {
-          throw new Error('Invalid user data');
-        }
-      } catch (err) {
-        // Only remove token on actual authentication errors (401, 403)
-        // Don't remove on network errors or server errors (500)
-        const status = err?.response?.status;
-        const isAuthError = status === 401 || status === 403;
-        
-        if (isAuthError) {
-          console.error('Token verification failed - authentication error:', err);
-          localStorage.removeItem('token');
-          setError('Session expired. Please login again.');
-          setUser(null);
-        } else if (status >= 500) {
-          // Server error - keep token, user might still be valid
-          console.warn('Server error during token verification, keeping session:', err);
-          setError('Server error. Please try again.');
-          // Don't remove token or user on server errors
-        } else if (!err.response) {
-          // Network error - keep token, might be temporary
-          console.warn('Network error during token verification, keeping session:', err);
-          setError(null);
-          // Don't remove token on network errors
-        } else {
-          // Other errors - remove token to be safe
-          console.error('Token verification failed:', err);
-          localStorage.removeItem('token');
-          setError('Session expired. Please login again.');
-          setUser(null);
-        }
-      } finally {
+      } else {
+        // Invalid token format
+        localStorage.removeItem('token');
+        setUser(null);
+        setError(null);
         setLoading(false);
       }
     };
