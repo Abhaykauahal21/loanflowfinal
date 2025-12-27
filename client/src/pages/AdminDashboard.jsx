@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import LoanCard from '../components/LoanCard';
 import LoadingSpinner from '../components/LoadingSpinner';
 import KycVerification from '../components/KycVerification';
-import { io } from 'socket.io-client';
+import { createSocket } from '../utils/socket';
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid,
@@ -216,10 +216,7 @@ const AdminDashboard = () => {
     const userId = user?._id || user?.id;
     if (!token || !userId) return;
 
-    const socket = io({
-      auth: { token },
-      transports: ['websocket', 'polling'],
-    });
+    const socket = createSocket();
 
     const onLoanStatusChanged = () => {
       setWsTick((t) => t + 1);

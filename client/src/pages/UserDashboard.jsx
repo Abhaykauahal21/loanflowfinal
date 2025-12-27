@@ -5,7 +5,7 @@ import LoanCard from '../components/LoanCard';
 import axios from '../api/axios';
 import { FaFileUpload, FaMoneyBillWave, FaChartLine, FaFileInvoiceDollar, FaBell, FaCreditCard, FaShieldAlt, FaPiggyBank } from 'react-icons/fa';
 import { getErrorMessage } from '../utils/errorHandling';
-import { io } from 'socket.io-client';
+import { createSocket } from '../utils/socket';
 
 // Lazy load components
 const PaymentForm = lazy(() => import('../components/PaymentForm'));
@@ -255,10 +255,7 @@ const UserDashboard = () => {
     const userId = user?._id || user?.id;
     if (!token || !userId) return;
 
-    const socket = io({
-      auth: { token },
-      transports: ['websocket', 'polling'],
-    });
+    const socket = createSocket();
 
     const onLoanStatusChanged = (payload) => {
       if (payload?.userId && payload.userId !== userId) return;
