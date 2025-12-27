@@ -219,7 +219,10 @@ VITE_API_URL=http://localhost:5004/api
 5. Publish Directory: `client/dist`
 6. Root Directory: `client`
 
-**Note**: The frontend will automatically use the backend URL from `VITE_API_URL` in production. If not set, it will use relative paths which won't work for cross-origin requests.
+**Important Notes**:
+- The frontend will automatically use the backend URL from `VITE_API_URL` in production. If not set, it will use relative paths which won't work for cross-origin requests.
+- The `_redirects` file in `client/public/` ensures all routes are handled by React Router (SPA routing). This file is automatically included in the build.
+- Make sure to set `VITE_API_URL=https://loanflowfinal.onrender.com/api` in your Render environment variables.
 
 ## 👥 Contributing
 1. Fork the repository
