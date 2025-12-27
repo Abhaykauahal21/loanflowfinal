@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle for percentage -->
+  <circle cx="48" cy="20" r="12" fill="#2563eb" opacity="0.9"/>
+  <text x="48" y="26" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">%</text>
+  
+  <!-- Growth arrow on the left -->
+  <path d="M 12 32 L 20 24 M 20 24 L 16 24 M 20 24 L 20 28" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <!-- Money bag -->
+  <path d="M 28 18 Q 28 14 32 14 Q 36 14 36 18 L 36 42 Q 36 46 32 46 Q 28 46 28 42 Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="2"/>
+  <!-- Bag tie/closure at top -->
+  <line x1="30" y1="18" x2="34" y2="18" stroke="#92400e" stroke-width="2" stroke-linecap="round"/>
+  <path d="M 30 18 Q 32 16 34 18" stroke="#92400e" stroke-width="1.5" fill="none"/>
+  <!-- Dollar sign on bag -->
+  <text x="32" y="35" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#92400e" text-anchor="middle">$</text>
+</svg>
+
