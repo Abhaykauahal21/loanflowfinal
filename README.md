@@ -221,7 +221,12 @@ VITE_API_URL=http://localhost:5004/api
 
 **Important Notes**:
 - The frontend will automatically use the backend URL from `VITE_API_URL` in production. If not set, it will use relative paths which won't work for cross-origin requests.
-- The `_redirects` file in `client/public/` ensures all routes are handled by React Router (SPA routing). This file is automatically included in the build.
+- **SPA Routing Fix**: For Render Static Sites, you need to configure redirects in the Render dashboard:
+  1. Go to your Static Site settings in Render
+  2. Navigate to "Redirects/Rewrites" section
+  3. Add a rewrite rule: `/*` → `/index.html` with status code `200`
+  4. This ensures all routes are handled by React Router (prevents 404 on refresh)
+- Alternatively, the `render.yaml` file in the root includes redirect configuration.
 - Make sure to set `VITE_API_URL=https://loanflowfinal.onrender.com/api` in your Render environment variables.
 
 ## 👥 Contributing
